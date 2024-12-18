@@ -1,30 +1,26 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use transform::{from_bytes, BytesSerializer};
 
-use std::collections::HashMap;
 pub fn main() {
     let ser = BytesSerializer::new();
 
-    // This will fail because we don't support String
     let test_string = "hello".to_string();
     let result = ser.to_bytes(&test_string);
     assert!(result.is_err());
 
-    // This will succeed because we support Option
     let test_option: Option<u8> = Some(0);
     let result = ser.to_bytes(&test_option);
     assert!(result.is_ok());
     let back: Option<u8> = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_option);
 
-    // This will succeed because we support Unit
     let test_unit = ();
     let result = ser.to_bytes(&test_unit);
     assert!(result.is_ok());
     let back: () = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_unit);
 
-    // This will fail because we don't support Unit Struct
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct UnitStruct;
 
@@ -34,7 +30,6 @@ pub fn main() {
     let back: UnitStruct = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_unit_struct);
 
-    // This will fail because we don't support Unit Variant
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     enum UnitVariant {
         A,
@@ -46,7 +41,6 @@ pub fn main() {
     let back: UnitVariant = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_unit_variant);
 
-    // This will fail because we don't support Newtype Struct
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct NewType(u32);
 
@@ -56,7 +50,6 @@ pub fn main() {
     let back: NewType = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_newtype_struct);
 
-    // This will fail because we don't support Newtype Variant
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     enum NewTypeVariant {
         A(u32),
@@ -68,7 +61,6 @@ pub fn main() {
     let back: NewTypeVariant = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_newtype_variant);
 
-    // This will succeed because we support Vec for u8 & u32
     let test_vec: Vec<u32> = vec![0, 1, 2, 3];
     let result = ser.to_bytes(&test_vec);
     assert!(result.is_ok());
@@ -76,14 +68,12 @@ pub fn main() {
     let back: Vec<u32> = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_vec);
 
-    // This will succeed because we support Tuple for u8 & u32
     let test_tuple: (u8, u32) = (0, 1);
     let result = ser.to_bytes(&test_tuple);
     assert!(result.is_ok());
     let back: (u8, u32) = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_tuple);
 
-    // This will succeed because we support Tuple Struct for u8 & u32
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct TupleStruct(u8, u32);
 
@@ -93,11 +83,10 @@ pub fn main() {
     let back: TupleStruct = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_tuple_struct);
 
-    // This will fail because we don't support Tuple Variant
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     enum TupleVariant {
-        B,          // But we don't support variant itself
-        A(u8, u32), // We support tuple in variant
+        B,
+        A(u8, u32),
     }
 
     let test_tuple_variant = TupleVariant::A(0, 1);
@@ -118,7 +107,6 @@ pub fn main() {
     let result = ser.to_bytes(&test_map);
     assert!(result.is_err());
 
-    // This will succeed because we support Struct for u8 & u32
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct Struct {
         a: u8,
@@ -131,11 +119,10 @@ pub fn main() {
     let back: Struct = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_struct);
 
-    // This will fail because we don't support Struct Variant
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     enum StructVariant {
-        A { a: u8, b: u32 }, // We support struct in variant
-        B,                   // But we don't support variant itself
+        A { a: u8, b: u32 },
+        B,
     }
 
     let test_struct_variant = StructVariant::A { a: 0, b: 1 };
