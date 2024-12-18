@@ -62,7 +62,6 @@ pub fn main() {
     let test_vec: Vec<u32> = vec![0, 1, 2, 3];
     let result = to_bytes(&test_vec);
     assert!(result.is_ok());
-    println!("{:?}", result);
     let back: Vec<u32> = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_vec);
 
@@ -126,6 +125,7 @@ pub fn main() {
     let test_struct_variant = StructVariant::A { a: 0, b: 1 };
     let result = to_bytes(&test_struct_variant);
     assert!(result.is_ok());
+    println!("{:?}", result);
     let back: StructVariant = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_struct_variant);
 

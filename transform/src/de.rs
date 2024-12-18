@@ -216,6 +216,13 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// knows how many values there are without looking at the serialized data.
     /// We need to implement this
     fn deserialize_tuple<V: de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value> {
+        let alen = self.read_byte()? as usize;
+        if alen != len {
+            return Err(Error::Custom(format!(
+                "Invalid tuple length: expected {}, got {}",
+                len, alen
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, len))
     }
 
@@ -227,6 +234,13 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         len: usize,
         visitor: V,
     ) -> Result<V::Value> {
+        let alen = self.read_byte()? as usize;
+        if alen != len {
+            return Err(Error::Custom(format!(
+                "Invalid tuple struct length: expected {}, got {}",
+                len, alen
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, len))
     }
 
@@ -244,6 +258,14 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
+        let len = self.read_byte()? as usize;
+        if len != fields.len() {
+            return Err(Error::Custom(format!(
+                "Invalid struct length: expected {}, got {}",
+                fields.len(),
+                len
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, fields.len())) // Need to make sure this works
     }
 
@@ -359,17 +381,21 @@ impl<'de> de::VariantAccess<'de> for EnumAccess<'_> {
         seed.deserialize(self.de)
     }
 
-    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value>
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        de::Deserializer::deserialize_tuple(self.de, len, visitor)
+        let alen = self.de.read_byte()? as usize;
+        // Visit the seq
+        visitor.visit_seq(SeqAccess::new(self.de, alen))
     }
 
     fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        de::Deserializer::deserialize_struct(self.de, "", fields, visitor)
+        let alen = self.de.read_byte()? as usize;
+        // Visit the seq
+        visitor.visit_seq(SeqAccess::new(self.de, alen))
     }
 }

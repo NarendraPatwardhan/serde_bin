@@ -183,7 +183,8 @@ impl ser::Serializer for &BytesSerializer {
 
     // Tuples are used for serializing fixed size sequences of values
     // They are created by `(1, 2, 3)`
-    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
+        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 
@@ -192,8 +193,9 @@ impl ser::Serializer for &BytesSerializer {
     fn serialize_tuple_struct(
         self,
         _name: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleStruct> {
+        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 
@@ -204,13 +206,14 @@ impl ser::Serializer for &BytesSerializer {
         _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
         if variant_index <= u8::MAX as u32 {
             self.buffer.borrow_mut().push(variant_index as u8);
         } else {
             return Err(Error::InvalidData);
         }
+        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 
@@ -222,7 +225,8 @@ impl ser::Serializer for &BytesSerializer {
 
     // Structs are used for serializing structs
     // They are created by `struct Struct { a: u32, b: u32 }`
-    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
+    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
+        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 
@@ -233,13 +237,14 @@ impl ser::Serializer for &BytesSerializer {
         _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeStructVariant> {
         if variant_index <= u8::MAX as u32 {
             self.buffer.borrow_mut().push(variant_index as u8);
         } else {
             return Err(Error::InvalidData);
         }
+        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 }
