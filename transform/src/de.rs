@@ -255,7 +255,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        let variant_index = self.read_u32()?;
+        let variant_index = self.read_byte()?;
         visitor.visit_enum(EnumAccess::new(self, variant_index as usize, variants))
     }
 

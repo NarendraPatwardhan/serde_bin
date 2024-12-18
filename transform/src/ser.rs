@@ -118,8 +118,7 @@ impl ser::Serializer for &BytesSerializer {
     // Unit Structs are structs without any fields
     // They are created by `struct Unit;`
     fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
-        self.buffer.borrow_mut().push(0);
-        Ok(())
+        self.serialize_unit()
     }
 
     // Unit Variants are enum variants without any fields
@@ -130,7 +129,14 @@ impl ser::Serializer for &BytesSerializer {
         variant_index: u32,
         _variant: &'static str,
     ) -> Result<()> {
-        self.serialize_u32(variant_index)
+        // If variant_index < u8::MAX, we can serialize it as a single byte
+        // Otherwise we return an error
+        if variant_index <= u8::MAX as u32 {
+            self.buffer.borrow_mut().push(variant_index as u8);
+            Ok(())
+        } else {
+            Err(Error::InvalidData)
+        }
     }
 
     // Newtype Structs are structs with a single unnamed field
@@ -154,7 +160,13 @@ impl ser::Serializer for &BytesSerializer {
     where
         T: ?Sized + Serialize,
     {
-        self.serialize_u32(variant_index)?;
+        // If variant_index < u8::MAX, we can serialize it as a single byte
+        // Otherwise we return an error
+        if variant_index <= u8::MAX as u32 {
+            self.buffer.borrow_mut().push(variant_index as u8);
+        } else {
+            return Err(Error::InvalidData);
+        }
         value.serialize(self)
     }
 
@@ -194,7 +206,11 @@ impl ser::Serializer for &BytesSerializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        self.serialize_u32(variant_index)?;
+        if variant_index <= u8::MAX as u32 {
+            self.buffer.borrow_mut().push(variant_index as u8);
+        } else {
+            return Err(Error::InvalidData);
+        }
         Ok(self)
     }
 
@@ -219,7 +235,11 @@ impl ser::Serializer for &BytesSerializer {
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        self.serialize_u32(variant_index)?;
+        if variant_index <= u8::MAX as u32 {
+            self.buffer.borrow_mut().push(variant_index as u8);
+        } else {
+            return Err(Error::InvalidData);
+        }
         Ok(self)
     }
 }

@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Error {
     Custom(String),
     UnsupportedType,
+    InvalidData,
 }
 
 impl fmt::Display for Error {
@@ -11,6 +12,7 @@ impl fmt::Display for Error {
         match self {
             Error::Custom(msg) => write!(f, "{}", msg),
             Error::UnsupportedType => write!(f, "Unsupported type"),
+            Error::InvalidData => write!(f, "Invalid data"),
         }
     }
 }
