@@ -20,6 +20,11 @@ impl BytesSerializer {
     }
 }
 
+pub fn to_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>> {
+    let ser = BytesSerializer::new();
+    ser.to_bytes(value)
+}
+
 impl ser::Serializer for &BytesSerializer {
     type Ok = ();
     type Error = Error;

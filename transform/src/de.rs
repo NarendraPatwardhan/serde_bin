@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use serde::de::{self};
+use serde::de::{self, Deserialize};
 use std::cell::RefCell;
 
 pub struct BytesDeserializer {
@@ -8,11 +8,20 @@ pub struct BytesDeserializer {
 }
 
 impl BytesDeserializer {
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+    pub fn new() -> Self {
         BytesDeserializer {
-            buffer: RefCell::new(bytes),
+            buffer: RefCell::new(Vec::new()),
             position: RefCell::new(0),
         }
+    }
+
+    pub fn from_bytes<'a, T>(&self, bytes: Vec<u8>) -> Result<T>
+    where
+        T: Deserialize<'a>,
+    {
+        self.buffer.borrow_mut().clear();
+        self.buffer.borrow_mut().extend(bytes);
+        T::deserialize(self)
     }
 
     pub fn read_bytes(&self, len: usize) -> Result<Vec<u8>> {
@@ -42,8 +51,8 @@ pub fn from_bytes<'a, T>(bytes: Vec<u8>) -> Result<T>
 where
     T: de::Deserialize<'a>,
 {
-    let deserializer = BytesDeserializer::from_bytes(bytes);
-    T::deserialize(&deserializer)
+    let de = BytesDeserializer::new();
+    de.from_bytes(bytes)
 }
 
 impl<'de> de::Deserializer<'de> for &BytesDeserializer {
