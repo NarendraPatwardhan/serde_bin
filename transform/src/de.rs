@@ -24,7 +24,7 @@ impl BytesDeserializer {
         T::deserialize(self)
     }
 
-    pub fn read_bytes(&self, len: usize) -> Result<Vec<u8>> {
+    fn read_bytes(&self, len: usize) -> Result<Vec<u8>> {
         let mut pos = self.position.borrow_mut();
         let buffer = self.buffer.borrow();
         let end = *pos + len;
@@ -36,12 +36,12 @@ impl BytesDeserializer {
         Ok(result)
     }
 
-    pub fn read_byte(&self) -> Result<u8> {
+    fn read_byte(&self) -> Result<u8> {
         let bytes = self.read_bytes(1)?;
         Ok(bytes[0])
     }
 
-    pub fn read_u32(&self) -> Result<u32> {
+    fn read_u32(&self) -> Result<u32> {
         let bytes = self.read_bytes(4)?;
         Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
