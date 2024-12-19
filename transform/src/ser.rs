@@ -4,12 +4,14 @@ use std::cell::RefCell;
 
 pub struct BytesSerializer {
     buffer: RefCell<Vec<u8>>,
+    offsets: RefCell<Vec<usize>>,
 }
 
 impl BytesSerializer {
     pub fn new() -> Self {
         BytesSerializer {
             buffer: RefCell::new(Vec::new()),
+            offsets: RefCell::new(Vec::new()),
         }
     }
 
@@ -171,12 +173,11 @@ impl ser::Serializer for &BytesSerializer {
 
     // Seqs are used for serializing sequences of values
     // They are created by `vec![1, 2, 3]`
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-        let lenu32 = match len {
-            Some(len) => len as u32,
-            None => 0 as u32,
-        };
-        self.serialize_u32(lenu32)?;
+    fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
+        // Push the current buffer length to the offsets stack
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        // Extend the buffer with 4 bytes for the length of the sequence
+        self.buffer.borrow_mut().extend(&0u32.to_le_bytes());
         Ok(self)
     }
 
@@ -265,6 +266,14 @@ impl ser::SerializeSeq for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
+        // Get the current buffer length
+        let buffer_len = self.buffer.borrow().len();
+        // Get the last offset
+        let offset = self.offsets.borrow_mut().pop().unwrap_or_default();
+        // Calculate the length of the sequence
+        let len = (buffer_len - offset - 4) as u32;
+        // Write the length to the buffer
+        self.buffer.borrow_mut()[offset..offset + 4].copy_from_slice(&len.to_le_bytes());
         Ok(())
     }
 }

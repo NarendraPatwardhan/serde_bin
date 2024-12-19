@@ -7,6 +7,14 @@ pub fn main() {
     let result = to_bytes(&test_string);
     assert!(result.is_err());
 
+    let test_vec: Vec<u32> = vec![0, 1, 2, 3];
+    let result = to_bytes(&test_vec);
+    println!("{:?}", result);
+    assert!(result.is_ok());
+    let back: Vec<u32> = from_bytes(&result.unwrap()).unwrap();
+    assert_eq!(back, test_vec);
+    println!("Success");
+
     let test_option: Option<u8> = Some(0);
     let result = to_bytes(&test_option);
     assert!(result.is_ok());

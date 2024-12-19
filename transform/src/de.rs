@@ -5,6 +5,7 @@ use std::cell::RefCell;
 pub struct BytesDeserializer {
     buffer: RefCell<Vec<u8>>,
     position: RefCell<usize>,
+    offsets: RefCell<Vec<usize>>,
 }
 
 impl BytesDeserializer {
@@ -12,6 +13,7 @@ impl BytesDeserializer {
         BytesDeserializer {
             buffer: RefCell::new(Vec::new()),
             position: RefCell::new(0),
+            offsets: RefCell::new(Vec::new()),
         }
     }
 
@@ -44,6 +46,10 @@ impl BytesDeserializer {
     fn read_u32(&self) -> Result<u32> {
         let bytes = self.read_bytes(4)?;
         Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    }
+
+    fn peek_position(&self) -> usize {
+        *self.position.borrow()
     }
 }
 
@@ -207,9 +213,17 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// Hint that the `Deserialize` type is expecting a sequence of values.
     /// We need to implement this
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        // read u32 for length prefix
+        // read u32 for number of bytes
         let len = self.read_u32()? as usize;
-        visitor.visit_seq(SeqAccess::new(self, len))
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Hint that the `Deserialize` type is expecting a sequence of values and
@@ -299,12 +313,12 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
 
 struct SeqAccess<'a> {
     de: &'a BytesDeserializer,
-    len: usize,
+    remaining: usize,
 }
 
 impl<'a> SeqAccess<'a> {
-    fn new(de: &'a BytesDeserializer, len: usize) -> Self {
-        SeqAccess { de, len }
+    fn new(de: &'a BytesDeserializer, remaining: usize) -> Self {
+        SeqAccess { de, remaining }
     }
 }
 
@@ -315,11 +329,16 @@ impl<'de> de::SeqAccess<'de> for SeqAccess<'_> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.len == 0 {
+        if self.remaining == 0 {
             return Ok(None);
         }
-        self.len -= 1;
-        seed.deserialize(self.de).map(Some)
+
+        let before = self.de.peek_position();
+        let val = seed.deserialize(&*self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(Some(val))
     }
 }
 
