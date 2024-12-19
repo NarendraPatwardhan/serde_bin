@@ -7,14 +7,6 @@ pub fn main() {
     let result = to_bytes(&test_string);
     assert!(result.is_err());
 
-    let test_vec: Vec<u32> = vec![0, 1, 2, 3];
-    let result = to_bytes(&test_vec);
-    println!("{:?}", result);
-    assert!(result.is_ok());
-    let back: Vec<u32> = from_bytes(&result.unwrap()).unwrap();
-    assert_eq!(back, test_vec);
-    println!("Success");
-
     let test_option: Option<u8> = Some(0);
     let result = to_bytes(&test_option);
     assert!(result.is_ok());
@@ -37,17 +29,6 @@ pub fn main() {
     assert_eq!(back, test_unit_struct);
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    enum UnitVariant {
-        A,
-    }
-
-    let test_unit_variant = UnitVariant::A;
-    let result = to_bytes(&test_unit_variant);
-    assert!(result.is_ok());
-    let back: UnitVariant = from_bytes(&result.unwrap()).unwrap();
-    assert_eq!(back, test_unit_variant);
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct NewType(u32);
 
     let test_newtype_struct = NewType(0);
@@ -55,17 +36,6 @@ pub fn main() {
     assert!(result.is_ok());
     let back: NewType = from_bytes(&result.unwrap()).unwrap();
     assert_eq!(back, test_newtype_struct);
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    enum NewTypeVariant {
-        A(u32),
-    }
-
-    let test_newtype_variant = NewTypeVariant::A(0);
-    let result = to_bytes(&test_newtype_variant);
-    assert!(result.is_ok());
-    let back: NewTypeVariant = from_bytes(&result.unwrap()).unwrap();
-    assert_eq!(back, test_newtype_variant);
 
     let test_vec: Vec<u32> = vec![0, 1, 2, 3];
     let result = to_bytes(&test_vec);
@@ -105,6 +75,29 @@ pub fn main() {
     assert!(result.is_ok());
     let back: TupleVariant = from_bytes(&result.unwrap()).unwrap();
     assert_eq!(back, test_tuple_variant);
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    enum NewTypeVariant {
+        A(u32),
+    }
+
+    let test_newtype_variant = NewTypeVariant::A(0);
+    let result = to_bytes(&test_newtype_variant);
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    let back: NewTypeVariant = from_bytes(&result).unwrap();
+    assert_eq!(back, test_newtype_variant);
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    enum UnitVariant {
+        A,
+    }
+
+    let test_unit_variant = UnitVariant::A;
+    let result = to_bytes(&test_unit_variant);
+    assert!(result.is_ok());
+    let back: UnitVariant = from_bytes(&result.unwrap()).unwrap();
+    assert_eq!(back, test_unit_variant);
 
     // This will fail because we don't support Map for u8 & u32
     let mut test_map = HashMap::new();

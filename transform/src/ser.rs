@@ -19,6 +19,26 @@ impl BytesSerializer {
         value.serialize(self)?;
         Ok(self.buffer.take())
     }
+
+    fn start_bytelen_encoding(&self) -> Result<&Self> {
+        // Push the current buffer length to the offsets stack
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        // Extend the buffer with 4 bytes for the length of the sequence
+        self.buffer.borrow_mut().extend(&0u32.to_le_bytes());
+        Ok(self)
+    }
+
+    fn end_bytelen_encoding(&self) -> Result<()> {
+        // Get the current buffer length
+        let buffer_len = self.buffer.borrow().len();
+        // Get the last offset
+        let offset = self.offsets.borrow_mut().pop().unwrap_or_default();
+        // Calculate the length of the sequence
+        let len = (buffer_len - offset - 4) as u32;
+        // Write the length to the buffer
+        self.buffer.borrow_mut()[offset..offset + 4].copy_from_slice(&len.to_le_bytes());
+        Ok(())
+    }
 }
 
 pub fn to_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>> {
@@ -45,19 +65,19 @@ impl ser::Serializer for &BytesSerializer {
     }
 
     fn serialize_i8(self, _v: i8) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_i16(self, _v: i16) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_i32(self, _v: i32) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_i64(self, _v: i64) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_u8(self, v: u8) -> Result<()> {
@@ -66,7 +86,7 @@ impl ser::Serializer for &BytesSerializer {
     }
 
     fn serialize_u16(self, _v: u16) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_u32(self, v: u32) -> Result<()> {
@@ -75,27 +95,27 @@ impl ser::Serializer for &BytesSerializer {
     }
 
     fn serialize_u64(self, _v: u64) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_f32(self, _v: f32) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_f64(self, _v: f64) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_char(self, _v: char) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_str(self, _v: &str) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_bytes(self, _v: &[u8]) -> Result<()> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn serialize_none(self) -> Result<()> {
@@ -130,10 +150,12 @@ impl ser::Serializer for &BytesSerializer {
         variant_index: u32,
         _variant: &'static str,
     ) -> Result<()> {
+        let _ = self.start_bytelen_encoding();
         // If variant_index < u8::MAX, we can serialize it as a single byte
         // Otherwise we return an error
         if variant_index <= u8::MAX as u32 {
             self.buffer.borrow_mut().push(variant_index as u8);
+            self.end_bytelen_encoding()?;
             Ok(())
         } else {
             Err(Error::InvalidData)
@@ -161,6 +183,7 @@ impl ser::Serializer for &BytesSerializer {
     where
         T: ?Sized + Serialize,
     {
+        let _ = self.start_bytelen_encoding();
         // If variant_index < u8::MAX, we can serialize it as a single byte
         // Otherwise we return an error
         if variant_index <= u8::MAX as u32 {
@@ -174,18 +197,13 @@ impl ser::Serializer for &BytesSerializer {
     // Seqs are used for serializing sequences of values
     // They are created by `vec![1, 2, 3]`
     fn serialize_seq(self, _len: Option<usize>) -> Result<Self::SerializeSeq> {
-        // Push the current buffer length to the offsets stack
-        self.offsets.borrow_mut().push(self.buffer.borrow().len());
-        // Extend the buffer with 4 bytes for the length of the sequence
-        self.buffer.borrow_mut().extend(&0u32.to_le_bytes());
-        Ok(self)
+        self.start_bytelen_encoding()
     }
 
     // Tuples are used for serializing fixed size sequences of values
     // They are created by `(1, 2, 3)`
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
-        self.serialize_u8(len as u8)?;
-        Ok(self)
+    fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple> {
+        self.start_bytelen_encoding()
     }
 
     // Tuple Structs are used for serializing structs with unnamed fields
@@ -193,10 +211,9 @@ impl ser::Serializer for &BytesSerializer {
     fn serialize_tuple_struct(
         self,
         _name: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeTupleStruct> {
-        self.serialize_u8(len as u8)?;
-        Ok(self)
+        self.start_bytelen_encoding()
     }
 
     // Tuple Variants are used for serializing enum variants with unnamed fields
@@ -206,14 +223,14 @@ impl ser::Serializer for &BytesSerializer {
         _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
+        let _ = self.start_bytelen_encoding();
         if variant_index <= u8::MAX as u32 {
             self.buffer.borrow_mut().push(variant_index as u8);
         } else {
             return Err(Error::InvalidData);
         }
-        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 
@@ -230,8 +247,8 @@ impl ser::Serializer for &BytesSerializer {
 
     // Structs are used for serializing structs
     // They are created by `struct Struct { a: u32, b: u32 }`
-    fn serialize_struct(self, _name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
-        self.serialize_u8(len as u8)?;
+    fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
+        let _ = self.start_bytelen_encoding();
         Ok(self)
     }
 
@@ -242,14 +259,14 @@ impl ser::Serializer for &BytesSerializer {
         _name: &'static str,
         variant_index: u32,
         _variant: &'static str,
-        len: usize,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
+        let _ = self.start_bytelen_encoding();
         if variant_index <= u8::MAX as u32 {
             self.buffer.borrow_mut().push(variant_index as u8);
         } else {
             return Err(Error::InvalidData);
         }
-        self.serialize_u8(len as u8)?;
         Ok(self)
     }
 }
@@ -266,15 +283,7 @@ impl ser::SerializeSeq for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        // Get the current buffer length
-        let buffer_len = self.buffer.borrow().len();
-        // Get the last offset
-        let offset = self.offsets.borrow_mut().pop().unwrap_or_default();
-        // Calculate the length of the sequence
-        let len = (buffer_len - offset - 4) as u32;
-        // Write the length to the buffer
-        self.buffer.borrow_mut()[offset..offset + 4].copy_from_slice(&len.to_le_bytes());
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
@@ -290,7 +299,7 @@ impl ser::SerializeTuple for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
@@ -306,7 +315,7 @@ impl ser::SerializeTupleStruct for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
@@ -322,7 +331,7 @@ impl ser::SerializeTupleVariant for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
@@ -361,7 +370,7 @@ impl ser::SerializeStruct for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
@@ -377,6 +386,6 @@ impl ser::SerializeStructVariant for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
