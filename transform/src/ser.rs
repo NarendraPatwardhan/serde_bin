@@ -32,7 +32,7 @@ impl BytesSerializer {
         // Get the current buffer length
         let buffer_len = self.buffer.borrow().len();
         // Get the last offset
-        let offset = self.offsets.borrow_mut().pop().unwrap_or_default();
+        let offset = self.offsets.borrow_mut().pop().ok_or(Error::InvalidData)?;
         // Calculate the length of the sequence
         let len = (buffer_len - offset - 4) as u32;
         // Write the length to the buffer
