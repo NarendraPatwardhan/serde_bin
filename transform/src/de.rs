@@ -15,7 +15,7 @@ impl BytesDeserializer {
         }
     }
 
-    pub fn from_bytes<'a, T>(&self, bytes: Vec<u8>) -> Result<T>
+    pub fn from_bytes<'a, T>(&self, bytes: &[u8]) -> Result<T>
     where
         T: Deserialize<'a>,
     {
@@ -47,7 +47,7 @@ impl BytesDeserializer {
     }
 }
 
-pub fn from_bytes<'a, T>(bytes: Vec<u8>) -> Result<T>
+pub fn from_bytes<'a, T>(bytes: &[u8]) -> Result<T>
 where
     T: de::Deserialize<'a>,
 {
