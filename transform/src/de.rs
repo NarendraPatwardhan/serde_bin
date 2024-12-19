@@ -5,6 +5,7 @@ use std::cell::RefCell;
 pub struct BytesDeserializer {
     buffer: RefCell<Vec<u8>>,
     position: RefCell<usize>,
+    offsets: RefCell<Vec<usize>>,
 }
 
 impl BytesDeserializer {
@@ -12,6 +13,7 @@ impl BytesDeserializer {
         BytesDeserializer {
             buffer: RefCell::new(Vec::new()),
             position: RefCell::new(0),
+            offsets: RefCell::new(Vec::new()),
         }
     }
 
@@ -45,6 +47,10 @@ impl BytesDeserializer {
         let bytes = self.read_bytes(4)?;
         Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
+
+    fn peek_position(&self) -> usize {
+        *self.position.borrow()
+    }
 }
 
 pub fn from_bytes<'a, T>(bytes: &[u8]) -> Result<T>
@@ -59,27 +65,27 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     type Error = Error;
 
     fn deserialize_any<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_bool<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_i8<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_i16<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_i32<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_i64<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_u8<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
@@ -87,7 +93,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     }
 
     fn deserialize_u16<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_u32<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
@@ -95,19 +101,19 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     }
 
     fn deserialize_u64<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_f32<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_f64<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     fn deserialize_char<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type is expecting a string value and does
@@ -118,7 +124,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// indicate this to the `Deserializer` by using `deserialize_string`
     /// instead.
     fn deserialize_str<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type is expecting a string value and would
@@ -129,7 +135,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// data, indicate that to the `Deserializer` by using `deserialize_str`
     /// instead.
     fn deserialize_string<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type is expecting a byte array and does not
@@ -141,7 +147,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// instead.
     fn deserialize_bytes<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
         // Unimplmented for now as serialization is without length prefix
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type is expecting a byte array and would
@@ -152,7 +158,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// data, indicate that to the `Deserializer` by using `deserialize_bytes`
     /// instead.
     fn deserialize_byte_buf<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type is expecting an optional value.
@@ -207,23 +213,34 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// Hint that the `Deserialize` type is expecting a sequence of values.
     /// We need to implement this
     fn deserialize_seq<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        // read u32 for length prefix
+        // read u32 for number of bytes
         let len = self.read_u32()? as usize;
-        visitor.visit_seq(SeqAccess::new(self, len))
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Hint that the `Deserialize` type is expecting a sequence of values and
     /// knows how many values there are without looking at the serialized data.
     /// We need to implement this
-    fn deserialize_tuple<V: de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value> {
-        let alen = self.read_byte()? as usize;
-        if alen != len {
-            return Err(Error::Custom(format!(
-                "Invalid tuple length: expected {}, got {}",
-                len, alen
-            )));
+    fn deserialize_tuple<V: de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value> {
+        // read u32 for number of bytes
+        let len = self.read_u32()? as usize;
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
         }
-        visitor.visit_seq(SeqAccess::new(self, len))
     }
 
     /// Hint that the `Deserialize` type is expecting a tuple struct with a
@@ -231,23 +248,35 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     fn deserialize_tuple_struct<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
-        len: usize,
+        _len: usize,
         visitor: V,
     ) -> Result<V::Value> {
-        let alen = self.read_byte()? as usize;
-        if alen != len {
-            return Err(Error::Custom(format!(
-                "Invalid tuple struct length: expected {}, got {}",
-                len, alen
-            )));
+        // read u32 for number of bytes
+        let len = self.read_u32()? as usize;
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
         }
-        visitor.visit_seq(SeqAccess::new(self, len))
     }
 
     /// Hint that the `Deserialize` type is expecting a map of key-value pairs.
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        // read u32 for number of bytes
         let len = self.read_u32()? as usize;
-        visitor.visit_map(MapAccess::new(self, len))
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_map(MapAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Hint that the `Deserialize` type is expecting a struct with a particular
@@ -256,18 +285,20 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
-        fields: &'static [&'static str],
+        _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        let len = self.read_byte()? as usize;
-        if len != fields.len() {
-            return Err(Error::Custom(format!(
-                "Invalid struct length: expected {}, got {}",
-                fields.len(),
-                len
-            )));
+        // read u32 for number of bytes
+        let len = self.read_u32()? as usize;
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
         }
-        visitor.visit_seq(SeqAccess::new(self, fields.len())) // Need to make sure this works
     }
 
     /// Hint that the `Deserialize` type is expecting an enum value with a
@@ -275,17 +306,19 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     fn deserialize_enum<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
-        variants: &'static [&'static str],
+        _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
+        let remaining = self.read_u32()? as usize;
         let variant_index = self.read_byte()?;
-        visitor.visit_enum(EnumAccess::new(self, variant_index as usize, variants))
+
+        visitor.visit_enum(EnumAccess::new(self, variant_index, remaining))
     }
 
     /// Hint that the `Deserialize` type is expecting the name of a struct
     /// field or the discriminant of an enum variant.
     fn deserialize_identifier<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 
     /// Hint that the `Deserialize` type needs to deserialize a value whose type
@@ -293,18 +326,18 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     ///
     /// Deserializers for non-self-describing formats may not support this mode.
     fn deserialize_ignored_any<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+        Err(Error::Unimplemented)
     }
 }
 
 struct SeqAccess<'a> {
     de: &'a BytesDeserializer,
-    len: usize,
+    remaining: usize,
 }
 
 impl<'a> SeqAccess<'a> {
-    fn new(de: &'a BytesDeserializer, len: usize) -> Self {
-        SeqAccess { de, len }
+    fn new(de: &'a BytesDeserializer, remaining: usize) -> Self {
+        SeqAccess { de, remaining }
     }
 }
 
@@ -315,30 +348,31 @@ impl<'de> de::SeqAccess<'de> for SeqAccess<'_> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.len == 0 {
+        if self.remaining == 0 {
             return Ok(None);
         }
-        self.len -= 1;
-        seed.deserialize(self.de).map(Some)
+
+        let before = self.de.peek_position();
+        let val = seed.deserialize(&*self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(Some(val))
     }
 }
 
 struct EnumAccess<'a> {
     de: &'a BytesDeserializer,
-    variant_index: usize,
-    variants: &'static [&'static str],
+    variant_index: u8,
+    remaining: RefCell<usize>,
 }
 
 impl<'a> EnumAccess<'a> {
-    fn new(
-        de: &'a BytesDeserializer,
-        variant_index: usize,
-        variants: &'static [&'static str],
-    ) -> Self {
+    fn new(de: &'a BytesDeserializer, variant_index: u8, remaining: usize) -> Self {
         EnumAccess {
             de,
             variant_index,
-            variants,
+            remaining: RefCell::new(remaining),
         }
     }
 }
@@ -351,20 +385,8 @@ impl<'de> de::EnumAccess<'de> for EnumAccess<'_> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        // Verify the variant index is valid
-        if self.variant_index >= self.variants.len() {
-            return Err(Error::Custom(format!(
-                "Invalid variant index: {}",
-                self.variant_index
-            )));
-        }
-
-        // Use the variant index as the value for the identifier
-        let variant_value = seed.deserialize(de::value::U32Deserializer::<Error>::new(
-            self.variant_index as u32,
-        ))?;
-
-        Ok((variant_value, self))
+        let val = seed.deserialize(de::value::U8Deserializer::<Error>::new(self.variant_index))?;
+        Ok((val, self))
     }
 }
 
@@ -386,29 +408,49 @@ impl<'de> de::VariantAccess<'de> for EnumAccess<'_> {
     where
         V: de::Visitor<'de>,
     {
-        let alen = self.de.read_byte()? as usize;
-        // Visit the seq
-        visitor.visit_seq(SeqAccess::new(self.de, alen))
+        let len = *self.remaining.borrow();
+        // Push the current buffer length to the offsets
+        self.de
+            .offsets
+            .borrow_mut()
+            .push(self.de.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self.de, len)) {
+            Ok(value) => {
+                self.de.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        let alen = self.de.read_byte()? as usize;
-        // Visit the seq
-        visitor.visit_seq(SeqAccess::new(self.de, alen))
+        let len = *self.remaining.borrow();
+        // Push the current buffer length to the offsets
+        self.de
+            .offsets
+            .borrow_mut()
+            .push(self.de.buffer.borrow().len());
+        match visitor.visit_seq(SeqAccess::new(self.de, len)) {
+            Ok(value) => {
+                self.de.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 }
 
 struct MapAccess<'a> {
     de: &'a BytesDeserializer,
-    len: usize,
+    remaining: usize,
 }
 
 impl<'a> MapAccess<'a> {
     fn new(de: &'a BytesDeserializer, len: usize) -> Self {
-        MapAccess { de, len }
+        MapAccess { de, remaining: len }
     }
 }
 
@@ -419,17 +461,27 @@ impl<'de> de::MapAccess<'de> for MapAccess<'_> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if self.len == 0 {
+        if self.remaining == 0 {
             return Ok(None);
         }
-        self.len -= 1;
-        seed.deserialize(self.de).map(Some)
+
+        let before = self.de.peek_position();
+        let val = seed.deserialize(&*self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(Some(val))
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
         V: de::DeserializeSeed<'de>,
     {
-        seed.deserialize(self.de)
+        let before = self.de.peek_position();
+        let val = seed.deserialize(self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(val)
     }
 }

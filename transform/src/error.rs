@@ -3,7 +3,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum Error {
     Custom(String),
-    UnsupportedType,
+    Unimplemented,
     InvalidData,
 }
 
@@ -11,7 +11,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Error::Custom(msg) => write!(f, "{}", msg),
-            Error::UnsupportedType => write!(f, "Unsupported type"),
+            Error::Unimplemented => write!(f, "Unsupported type"),
             Error::InvalidData => write!(f, "Invalid data"),
         }
     }
