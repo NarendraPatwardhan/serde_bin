@@ -15,7 +15,7 @@ impl BytesDeserializer {
         }
     }
 
-    pub fn from_bytes<'a, T>(&self, bytes: Vec<u8>) -> Result<T>
+    pub fn from_bytes<'a, T>(&self, bytes: &[u8]) -> Result<T>
     where
         T: Deserialize<'a>,
     {
@@ -24,7 +24,7 @@ impl BytesDeserializer {
         T::deserialize(self)
     }
 
-    pub fn read_bytes(&self, len: usize) -> Result<Vec<u8>> {
+    fn read_bytes(&self, len: usize) -> Result<Vec<u8>> {
         let mut pos = self.position.borrow_mut();
         let buffer = self.buffer.borrow();
         let end = *pos + len;
@@ -36,18 +36,18 @@ impl BytesDeserializer {
         Ok(result)
     }
 
-    pub fn read_byte(&self) -> Result<u8> {
+    fn read_byte(&self) -> Result<u8> {
         let bytes = self.read_bytes(1)?;
         Ok(bytes[0])
     }
 
-    pub fn read_u32(&self) -> Result<u32> {
+    fn read_u32(&self) -> Result<u32> {
         let bytes = self.read_bytes(4)?;
         Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 }
 
-pub fn from_bytes<'a, T>(bytes: Vec<u8>) -> Result<T>
+pub fn from_bytes<'a, T>(bytes: &[u8]) -> Result<T>
 where
     T: de::Deserialize<'a>,
 {
@@ -216,6 +216,13 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// knows how many values there are without looking at the serialized data.
     /// We need to implement this
     fn deserialize_tuple<V: de::Visitor<'de>>(self, len: usize, visitor: V) -> Result<V::Value> {
+        let alen = self.read_byte()? as usize;
+        if alen != len {
+            return Err(Error::Custom(format!(
+                "Invalid tuple length: expected {}, got {}",
+                len, alen
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, len))
     }
 
@@ -227,12 +234,20 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         len: usize,
         visitor: V,
     ) -> Result<V::Value> {
+        let alen = self.read_byte()? as usize;
+        if alen != len {
+            return Err(Error::Custom(format!(
+                "Invalid tuple struct length: expected {}, got {}",
+                len, alen
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, len))
     }
 
     /// Hint that the `Deserialize` type is expecting a map of key-value pairs.
-    fn deserialize_map<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+    fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let len = self.read_u32()? as usize;
+        visitor.visit_map(MapAccess::new(self, len))
     }
 
     /// Hint that the `Deserialize` type is expecting a struct with a particular
@@ -244,6 +259,14 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
+        let len = self.read_byte()? as usize;
+        if len != fields.len() {
+            return Err(Error::Custom(format!(
+                "Invalid struct length: expected {}, got {}",
+                fields.len(),
+                len
+            )));
+        }
         visitor.visit_seq(SeqAccess::new(self, fields.len())) // Need to make sure this works
     }
 
@@ -359,17 +382,54 @@ impl<'de> de::VariantAccess<'de> for EnumAccess<'_> {
         seed.deserialize(self.de)
     }
 
-    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value>
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        de::Deserializer::deserialize_tuple(self.de, len, visitor)
+        let alen = self.de.read_byte()? as usize;
+        // Visit the seq
+        visitor.visit_seq(SeqAccess::new(self.de, alen))
     }
 
-    fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
+    fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
-        de::Deserializer::deserialize_struct(self.de, "", fields, visitor)
+        let alen = self.de.read_byte()? as usize;
+        // Visit the seq
+        visitor.visit_seq(SeqAccess::new(self.de, alen))
+    }
+}
+
+struct MapAccess<'a> {
+    de: &'a BytesDeserializer,
+    len: usize,
+}
+
+impl<'a> MapAccess<'a> {
+    fn new(de: &'a BytesDeserializer, len: usize) -> Self {
+        MapAccess { de, len }
+    }
+}
+
+impl<'de> de::MapAccess<'de> for MapAccess<'_> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        if self.len == 0 {
+            return Ok(None);
+        }
+        self.len -= 1;
+        seed.deserialize(self.de).map(Some)
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.de)
     }
 }
