@@ -14,9 +14,8 @@ impl BytesSerializer {
     }
 
     pub fn to_bytes<T: Serialize>(&self, value: &T) -> Result<Vec<u8>> {
-        self.buffer.borrow_mut().clear();
         value.serialize(self)?;
-        Ok(self.buffer.borrow().clone())
+        Ok(self.buffer.take())
     }
 }
 
