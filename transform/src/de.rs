@@ -266,8 +266,17 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
 
     /// Hint that the `Deserialize` type is expecting a map of key-value pairs.
     fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        // read u32 for number of bytes
         let len = self.read_u32()? as usize;
-        visitor.visit_map(MapAccess::new(self, len))
+        // Push the current buffer length to the offsets
+        self.offsets.borrow_mut().push(self.buffer.borrow().len());
+        match visitor.visit_map(MapAccess::new(self, len)) {
+            Ok(value) => {
+                self.offsets.borrow_mut().pop();
+                Ok(value)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Hint that the `Deserialize` type is expecting a struct with a particular
@@ -276,7 +285,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     fn deserialize_struct<V: de::Visitor<'de>>(
         self,
         _name: &'static str,
-        fields: &'static [&'static str],
+        _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
         // read u32 for number of bytes
@@ -436,12 +445,12 @@ impl<'de> de::VariantAccess<'de> for EnumAccess<'_> {
 
 struct MapAccess<'a> {
     de: &'a BytesDeserializer,
-    len: usize,
+    remaining: usize,
 }
 
 impl<'a> MapAccess<'a> {
     fn new(de: &'a BytesDeserializer, len: usize) -> Self {
-        MapAccess { de, len }
+        MapAccess { de, remaining: len }
     }
 }
 
@@ -452,17 +461,27 @@ impl<'de> de::MapAccess<'de> for MapAccess<'_> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if self.len == 0 {
+        if self.remaining == 0 {
             return Ok(None);
         }
-        self.len -= 1;
-        seed.deserialize(self.de).map(Some)
+
+        let before = self.de.peek_position();
+        let val = seed.deserialize(&*self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(Some(val))
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
         V: de::DeserializeSeed<'de>,
     {
-        seed.deserialize(self.de)
+        let before = self.de.peek_position();
+        let val = seed.deserialize(self.de)?;
+        let consumed = self.de.peek_position() - before;
+
+        self.remaining -= consumed;
+        Ok(val)
     }
 }

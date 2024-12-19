@@ -236,12 +236,8 @@ impl ser::Serializer for &BytesSerializer {
 
     // Maps are used for serializing maps
     // They are created by `HashMap::new()`
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
-        let lenu32 = match len {
-            Some(len) => len as u32,
-            None => 0 as u32,
-        };
-        self.serialize_u32(lenu32)?;
+    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+        let _ = self.start_bytelen_encoding();
         Ok(self)
     }
 
@@ -354,7 +350,7 @@ impl ser::SerializeMap for &BytesSerializer {
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.end_bytelen_encoding()
     }
 }
 
