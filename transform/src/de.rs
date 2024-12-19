@@ -245,8 +245,9 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     }
 
     /// Hint that the `Deserialize` type is expecting a map of key-value pairs.
-    fn deserialize_map<V: de::Visitor<'de>>(self, _visitor: V) -> Result<V::Value> {
-        Err(Error::UnsupportedType)
+    fn deserialize_map<V: de::Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let len = self.read_u32()? as usize;
+        visitor.visit_map(MapAccess::new(self, len))
     }
 
     /// Hint that the `Deserialize` type is expecting a struct with a particular
@@ -390,12 +391,45 @@ impl<'de> de::VariantAccess<'de> for EnumAccess<'_> {
         visitor.visit_seq(SeqAccess::new(self.de, alen))
     }
 
-    fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
+    fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: de::Visitor<'de>,
     {
         let alen = self.de.read_byte()? as usize;
         // Visit the seq
         visitor.visit_seq(SeqAccess::new(self.de, alen))
+    }
+}
+
+struct MapAccess<'a> {
+    de: &'a BytesDeserializer,
+    len: usize,
+}
+
+impl<'a> MapAccess<'a> {
+    fn new(de: &'a BytesDeserializer, len: usize) -> Self {
+        MapAccess { de, len }
+    }
+}
+
+impl<'de> de::MapAccess<'de> for MapAccess<'_> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        if self.len == 0 {
+            return Ok(None);
+        }
+        self.len -= 1;
+        seed.deserialize(self.de).map(Some)
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        seed.deserialize(self.de)
     }
 }

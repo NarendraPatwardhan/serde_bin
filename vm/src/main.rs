@@ -100,9 +100,11 @@ pub fn main() {
 
     // This will fail because we don't support Map for u8 & u32
     let mut test_map = HashMap::new();
-    test_map.insert(0 as u8, 1 as u8);
+    test_map.insert(0 as u8, 1 as u32);
     let result = to_bytes(&test_map);
-    assert!(result.is_err());
+    assert!(result.is_ok());
+    let back: HashMap<u8, u32> = from_bytes(result.unwrap()).unwrap();
+    assert_eq!(back, test_map);
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct Struct {
@@ -125,7 +127,6 @@ pub fn main() {
     let test_struct_variant = StructVariant::A { a: 0, b: 1 };
     let result = to_bytes(&test_struct_variant);
     assert!(result.is_ok());
-    println!("{:?}", result);
     let back: StructVariant = from_bytes(result.unwrap()).unwrap();
     assert_eq!(back, test_struct_variant);
 

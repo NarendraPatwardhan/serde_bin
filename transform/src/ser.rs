@@ -218,7 +218,12 @@ impl ser::Serializer for &BytesSerializer {
 
     // Maps are used for serializing maps
     // They are created by `HashMap::new()`
-    fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
+        let lenu32 = match len {
+            Some(len) => len as u32,
+            None => 0 as u32,
+        };
+        self.serialize_u32(lenu32)?;
         Ok(self)
     }
 
@@ -316,18 +321,18 @@ impl ser::SerializeMap for &BytesSerializer {
     type Ok = ();
     type Error = Error;
 
-    fn serialize_key<T>(&mut self, _key: &T) -> Result<()>
+    fn serialize_key<T>(&mut self, key: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        Err(Error::UnsupportedType)
+        key.serialize(*self)
     }
 
-    fn serialize_value<T>(&mut self, _value: &T) -> Result<()>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<()>
     where
         T: ?Sized + Serialize,
     {
-        Err(Error::UnsupportedType)
+        value.serialize(*self)
     }
 
     fn end(self) -> Result<()> {
