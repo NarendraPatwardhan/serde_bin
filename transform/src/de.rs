@@ -171,7 +171,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         match byte {
             0 => de::Visitor::visit_none(visitor),
             1 => de::Visitor::visit_some(visitor, self),
-            _ => Err(Error::Custom("Invalid Option value".to_string())),
+            _ => Err(Error::InvalidData),
         }
     }
 
@@ -181,7 +181,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         if byte == 0 {
             visitor.visit_unit()
         } else {
-            Err(Error::Custom("Invalid Unit value".to_string()))
+            Err(Error::InvalidData)
         }
     }
 
@@ -196,7 +196,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         if byte == 0 {
             visitor.visit_unit()
         } else {
-            Err(Error::Custom("Invalid Unit Struct value".to_string()))
+            Err(Error::InvalidData)
         }
     }
 
@@ -230,17 +230,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
     /// knows how many values there are without looking at the serialized data.
     /// We need to implement this
     fn deserialize_tuple<V: de::Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value> {
-        // read u32 for number of bytes
-        let len = self.read_u32()? as usize;
-        // Push the current buffer length to the offsets
-        self.offsets.borrow_mut().push(self.buffer.borrow().len());
-        match visitor.visit_seq(SeqAccess::new(self, len)) {
-            Ok(value) => {
-                self.offsets.borrow_mut().pop();
-                Ok(value)
-            }
-            Err(e) => Err(e),
-        }
+        self.deserialize_seq(visitor)
     }
 
     /// Hint that the `Deserialize` type is expecting a tuple struct with a
@@ -251,17 +241,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         _len: usize,
         visitor: V,
     ) -> Result<V::Value> {
-        // read u32 for number of bytes
-        let len = self.read_u32()? as usize;
-        // Push the current buffer length to the offsets
-        self.offsets.borrow_mut().push(self.buffer.borrow().len());
-        match visitor.visit_seq(SeqAccess::new(self, len)) {
-            Ok(value) => {
-                self.offsets.borrow_mut().pop();
-                Ok(value)
-            }
-            Err(e) => Err(e),
-        }
+        self.deserialize_seq(visitor)
     }
 
     /// Hint that the `Deserialize` type is expecting a map of key-value pairs.
@@ -288,17 +268,7 @@ impl<'de> de::Deserializer<'de> for &BytesDeserializer {
         _fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        // read u32 for number of bytes
-        let len = self.read_u32()? as usize;
-        // Push the current buffer length to the offsets
-        self.offsets.borrow_mut().push(self.buffer.borrow().len());
-        match visitor.visit_seq(SeqAccess::new(self, len)) {
-            Ok(value) => {
-                self.offsets.borrow_mut().pop();
-                Ok(value)
-            }
-            Err(e) => Err(e),
-        }
+        self.deserialize_seq(visitor)
     }
 
     /// Hint that the `Deserialize` type is expecting an enum value with a
